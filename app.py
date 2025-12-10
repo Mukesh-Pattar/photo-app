@@ -5,7 +5,7 @@ from config import AWS_BUCKET_NAME, AWS_REGION
 
 app = Flask(__name__)
 
-# S3 client using instance role (recommended) OR env vars
+# Create S3 client (uses EC2 IAM Role or env vars)
 s3 = boto3.client('s3', region_name=AWS_REGION)
 
 
@@ -22,19 +22,23 @@ def index():
 
     files = []
 
+    # If bucket contains files
     if "Contents" in response:
         files = [obj["Key"] for obj in response["Contents"]]
 
-    return render_template("index.html", files=files)
+    # Send bucket name to template so images load
+    return render_template("index.html", files=files, bucket=AWS_BUCKET_NAME)
 
 
 @app.route("/upload", methods=["POST"])
 def upload():
     """Upload file to S3"""
+
     if "file" not in request.files:
         return "No file part"
 
     file = request.files["file"]
+
     if file.filename == "":
         return "No selected file"
 
@@ -48,7 +52,7 @@ def upload():
 
 @app.route("/download/<filename>")
 def download(filename):
-    """Download a file from S3"""
+    """Download file from S3"""
 
     try:
         s3.download_file(AWS_BUCKET_NAME, filename, filename)
