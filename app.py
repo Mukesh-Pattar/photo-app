@@ -1,55 +1,62 @@
-from flask import Flask, render_template, request, redirect
+from flask import Flask, request, render_template, send_file, redirect, url_for
 import boto3
-import uuid
 import os
+from config import AWS_BUCKET_NAME, AWS_REGION
 
 app = Flask(__name__)
 
-# Boto3 will automatically use IAM Role when running on EC2
-s3 = boto3.client('s3')
-
-# Bucket name from env variable
-AWS_BUCKET_NAME = os.environ.get("AWS_BUCKET_NAME")
-AWS_REGION = os.environ.get("AWS_REGION", "ap-south-1")
+# S3 client using instance role (recommended) OR env vars
+s3 = boto3.client('s3', region_name=AWS_REGION)
 
 
-@app.route('/')
+@app.route("/")
 def index():
-    """List all images stored in S3 bucket."""
+    """List files in S3 bucket"""
 
-    contents = s3.list_objects_v2(Bucket=AWS_BUCKET_NAME)
+    print("Bucket Name Loaded:", AWS_BUCKET_NAME, type(AWS_BUCKET_NAME))
+
+    try:
+        response = s3.list_objects_v2(Bucket=AWS_BUCKET_NAME)
+    except Exception as e:
+        return f"Error accessing S3 bucket: {str(e)}"
+
     files = []
 
-    if 'Contents' in contents:
-        for item in contents['Contents']:
-            url = f"https://{AWS_BUCKET_NAME}.s3.{AWS_REGION}.amazonaws.com/{item['Key']}"
-            files.append(url)
+    if "Contents" in response:
+        files = [obj["Key"] for obj in response["Contents"]]
 
-    return render_template('index.html', files=files)
+    return render_template("index.html", files=files)
 
 
-@app.route('/upload', methods=['POST'])
+@app.route("/upload", methods=["POST"])
 def upload():
-    """Upload a photo to S3."""
-    file = request.files['file']
+    """Upload file to S3"""
+    if "file" not in request.files:
+        return "No file part"
 
-    if file:
-        filename = str(uuid.uuid4()) + "_" + file.filename
-        s3.upload_fileobj(file, AWS_BUCKET_NAME, filename)
+    file = request.files["file"]
+    if file.filename == "":
+        return "No selected file"
 
-    return redirect('/')
+    try:
+        s3.upload_fileobj(file, AWS_BUCKET_NAME, file.filename)
+    except Exception as e:
+        return f"Upload failed: {str(e)}"
+
+    return redirect(url_for("index"))
 
 
-@app.route('/download/<filename>')
+@app.route("/download/<filename>")
 def download(filename):
-    """Download a photo from S3 to server temp folder."""
-    local_path = f"/tmp/{filename}"
+    """Download a file from S3"""
 
-    s3.download_file(AWS_BUCKET_NAME, filename, local_path)
+    try:
+        s3.download_file(AWS_BUCKET_NAME, filename, filename)
+    except Exception as e:
+        return f"Download failed: {str(e)}"
 
-    return f"Downloaded to: {local_path}"
+    return send_file(filename, as_attachment=True)
 
 
 if __name__ == "__main__":
-    # run on EC2 public ip
-    app.run(host="0.0.0.0", port=5000)
+    app.run(host="0.0.0.0", port=5000, debug=True)
