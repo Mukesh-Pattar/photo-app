@@ -2,8 +2,24 @@
 <html>
 <head>
     <title>Photo App</title>
+    <style>
+        img {
+            width: 200px;
+            height: 200px;
+            object-fit: cover;
+            margin: 10px;
+            border: 2px solid #666;
+            border-radius: 10px;
+        }
+        .image-container {
+            display: inline-block;
+            text-align: center;
+            margin: 10px;
+        }
+    </style>
 </head>
 <body>
+
     <h1>Photo App</h1>
 
     <h2>Upload Photo</h2>
@@ -13,14 +29,18 @@
     </form>
 
     <h2>Photos</h2>
-    <ul>
+
+    {% if files %}
         {% for file in files %}
-            <li>
-                {{ file }}
+            <div class="image-container">
+                <img src="https://{{ bucket }}.s3.amazonaws.com/{{ file }}" alt="{{ file }}">
+                <br>
                 <a href="/download/{{ file }}">Download</a>
-            </li>
+            </div>
         {% endfor %}
-    </ul>
+    {% else %}
+        <p>No images found in the bucket.</p>
+    {% endif %}
 
 </body>
 </html>
